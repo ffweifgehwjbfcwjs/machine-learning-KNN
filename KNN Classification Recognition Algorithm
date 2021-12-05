@@ -1,0 +1,169 @@
+import numpy as np
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+
+
+'''KNN算法做回归预测，可以用鸢尾花数据的前三个属性来预测第四个属性'''
+
+data=pd.read_csv(r"Iris.csv")
+#删除不需要的Id和Species列
+data.drop(["Id","Species"],axis=1,inplace=True)
+#删除重复数据
+data.drop_duplicates(inplace=True)
+
+
+
+
+'''具体算法的编写'''
+
+class KNN:
+    '''该算法用于回归预测，根据前三个属性，寻找最近的K个邻居，然后再根据k个邻居的第4个特征属性去预测当前样本的第四个特征值'''
+
+    def __init__(self, k):
+        '''
+        初始化
+        Parameters
+        -----
+        k:int
+            邻居个位数
+        '''
+        self.k = k
+
+
+    def fit(self, X, y):
+        '''
+        训练方法
+        Parameters
+        -----
+        X: 类数组类型（特征矩阵），可以是list也可以是ndarray，形状为： [样本数量,特征数量]
+        待训练的样本特征（属性）
+        y: 类数组类型（目标标签），形状为：[样本数量]
+        '''
+        self.X = np.asarray(X)  # 转换为ndarray类型
+        self.y = np.asarray(y)
+
+    def predict(self, X):#无权重
+        '''
+        对样本进行预测
+        Parameters:
+        X: 类数组类型，可以是List也可以是ndarray，形状为： [样本数量,特征数量]
+        Returns:
+        result:数组类型，预测结果
+        '''
+        X = np.asarray(X)
+        #保存的结果值
+        result = []
+        for x in X:
+            #计算距离（与训练集中每个x的距离）
+            dis = np.sqrt(np.sum((x - self.X) ** 2, axis=1))  # 对于测试集中的样本x，与训练集的每个数据求欧氏距离
+            index = dis.argsort()  # 返回数组排序后，每个元素在原数组中的索引
+            index = index[:self.k]  # 截取前K个距离最近的索引
+            result.append(np.mean(self.y[index]))  # 计算均值，然后加入到结果列表中
+        return np.array(result)
+
+    def predict2(self, X):#有权重
+
+        '''权重的计算方式：使用每个节点（邻居）距离的倒数/所有邻居距离倒数之和'''
+
+        '''
+        对样本进行预测，加入权重计算
+        Parameters:
+        X: 类数组类型，可以是List也可以是Ndarray，形状为： [样本数量,特征数量]
+        Returns:
+        result：数组类型，预测结果
+        '''
+        X = np.asarray(X)
+        result = []
+        for x in X:
+            dis = np.sqrt(np.sum((x - self.X) ** 2, axis=1))
+            index = dis.argsort()
+            index = index[:self.k]  # 截取前K个
+            #求所有邻居节点距离倒数之和(注意：最后加上一个很小的值，就是为了避免除数为0的情况)
+            #当两行数据前三个属性都相同，第四个需要预测的属性不同时，这俩行数据不同不会被前面当成重复值剔除，但是这里节点是重合的，又会导致这里的dis[index]为0
+            s=np.sum(1/(dis[index]+0.001))
+            #使用每个节点距离的倒数/倒数之和，得到权重
+            weight=(1/(dis[index]+0.001))/s
+            #使用邻居节点的标签值，乘以对应的权重，然后相加，得到最终的预测结果
+            result.append(np.sum(self.y[index]*weight))
+        return np.asarray(result)
+
+
+
+'''算法结果测试'''
+t=data.sample(len(data),random_state=0)#打乱数据集
+train_X=t.iloc[:120,:-1]
+train_y=t.iloc[:120,-1]
+test_X=t.iloc[120:,:-1]
+test_y=t.iloc[120:,-1]
+
+
+
+
+'''不考虑权重'''
+
+knn=KNN(k=5)
+knn.fit(train_X,train_y)
+result=knn.predict(test_X)
+print(result)
+
+print(np.sum((result-test_y)**2))# 输出误差的平方的和
+print(np.mean((result-test_y)**2))# 输出误差的平方的平均值
+# 之所以平方的原因是：预测的有时候偏大有时候偏小，如果不平方会出现正负偏差抵消的情况
+print(test_y.values)#test_y本身带有索引，但是我们只需要他的值，所以就单独取出值
+
+'''结果可视化'''
+
+#默认情况matplotlib不支持中文显示，设置一下使其支持中文显示
+mpl.rcParams['font.family']='SimHei'#黑体
+mpl.rcParams['axes.unicode_minus']=False#负号会默认使用Unicode显示，不支持中文显示，所以需要设置
+
+#设置画布大小
+plt.figure(figsize=(10,10))
+
+#绘制预测值
+plt.plot(result,"ro-",label="预测值")
+#绘制真实值
+plt.plot(test_y.values,"go--",label="真实值")
+
+plt.legend()
+plt.xlabel("节点序号")
+plt.ylabel("花瓣宽度")
+plt.title("KNN连续值预测展示（未赋权）")
+
+
+
+
+
+'''考虑权重'''
+knn=KNN(k=5)
+knn.fit(train_X,train_y)
+result2=knn.predict2(test_X)
+print(result2)
+
+print(np.sum((result2-test_y)**2))# 输出误差的平方的和
+print(np.mean((result-test_y)**2))# 输出误差的平方的平均值
+# 之所以平方的原因是：预测的有时候偏大有时候偏小，如果不平方会出现正负偏差抵消的情况
+print(test_y.values)#test_y本身带有索引，但是我们只需要他的值，所以就单独取出值
+
+'''结果可视化'''
+
+#默认情况matplotlib不支持中文显示，设置一下使其支持中文显示
+mpl.rcParams['font.family']='SimHei'#黑体
+mpl.rcParams['axes.unicode_minus']=False#负号会默认使用Unicode显示，不支持中文显示，所以需要设置
+
+#设置画布大小
+plt.figure(figsize=(10,10))
+
+#绘制预测值
+plt.plot(result2,"ro-",label="预测值")
+#绘制真实值
+plt.plot(test_y.values,"go--",label="真实值")
+
+plt.legend()
+plt.xlabel("节点序号")
+plt.ylabel("花瓣宽度")
+plt.title("KNN连续值预测展示（已赋权）")
+
+plt.show()
