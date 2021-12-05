@@ -1,0 +1,174 @@
+import numpy as np
+import pandas as pd
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+
+'''实际情况下邻近的K个邻居的权重不一定都是1，需要考虑权重问题'''
+
+'''导入与显示数据集'''
+
+#读取莺尾花数据集，header参数来指定标题的行，默认为0，如果没有标题，则使用None
+data=pd.read_csv(r"Iris.csv",header=0)#只读模式打开CSV格式的莺尾花数据集
+'''print(data)'''
+#显示前/后n行数据，默认为5行
+'''print(data.head(10))'''#data.head()可以用来显示前几行数据，如果括号里面没有数，默认为5行
+'''print(data.tail(10))'''#data.tail()可以用来显示末尾几行数据，如果括号里面没有数，默认为5行
+#随机抽取样本，默认抽取1行
+'''print(data.sample(5))'''#data.sample()为从整个数据集里随机抽行，如果括号里面没有数，默认抽1行
+
+
+
+
+'''数据预处理部分'''
+
+#将最后一列种类的文本转化成数字，按类型分别设为0,1,2
+data["Species"]=data["Species"].map({"Iris-virginica":0,"Iris-setosa":1,"Iris-versicolor":2})
+
+#由于Id列只是表示该列的序号，没有其他意义，所以可以将该列删除
+#注意：data.drop()不是在源数据集上进行操作，而是在副本上进行操作,为了修改源数据，可以：1.将drop（）函数操作后的结果再赋给data；2.在drop()函数中加一个参数inplace，设=1即为对源数据集操作
+data.drop("Id",axis=1,inplace=True)#data.drop()默认删除行，即axis=0，可设置axis=1删除列
+'''print(data)'''
+
+#判断数据集中是否有重复值
+'''print(data.duplicated())'''#判断每一行是否有重复值，有就返回True
+'''print(data.duplicated().any())'''#判断所有行是否有重复值，只要有一行有就是True
+
+#查看数据集的行数
+'''print(len(data))'''
+
+#删除有重复值的行
+data.drop_duplicates(inplace=True)
+'''print(len(data))'''
+
+#查看每种类型的鸢尾花具有多少行数据
+'''print(data["Species"].value_counts())'''
+
+
+
+
+'''KNN算法编写'''
+
+class KNN:
+    "使用python语言实现K近邻算法（实现分类）"
+    def __init__(self,k):#K表示要选择的邻近值个数为k个
+        self.k=k
+
+    def fit(self,X,y):#python习惯对矩阵数组用大写字母，对向量用小写字母
+        '''
+        训练方法
+        parameters:
+        ------
+        X:类数组类型，形状为：[样本数量（行），特征向量（列）]
+          待训练的样本特征（属性）
+
+        y:类数组类型，形状为：[样本数量（行，与X的样本数量保持一致）]
+          每个样本的目标值（标签）
+        '''
+        #将X转化成ndarray数组类型
+        self.X=np.asarray(X)#把类数组类型（可能是list或者DataFrame等）的X转化成数组类型
+        self.y = np.asarray(y)
+
+
+    def predict2(self, X):#考虑权重（把距离的倒数作为权重）
+        '''
+        根据参数传递的样本，对样本数据进行预测
+        parameters:
+        ------
+        X:类数组类型，形状为：[样本数量（行），特征向量（列）]
+          待训练的样本特征（属性）
+
+        Returns
+        ------
+        result:数组类型
+               预测结果
+        '''
+        X = np.asarray(X)
+        result = []
+
+     #对ndarray数组进行遍历，每次取数组中的一行
+        for x in X:
+            #对于测试集中的每一个样本，依此与训练集中的所有样本求欧氏距离
+            dis=np.sqrt(np.sum((x-self.X)**2,axis=1))#x为测试集中的样本，self.X为训练集中的样本，数组的加减乘除法运算为数组对应位置数字的加减乘除法，此步是求欧氏距离
+
+            #对原数组排序，并返回排序后的数在原数组（排序之前的数组）中的索引
+            index=dis.argsort()
+
+            #进行截断，只取前k个元素（取举例最近的k个元素的索引）
+            index=index[:self.k]#从第一个元素到self.k截止
+
+            #返回数组中每个元素出现的次数（元素必须是非负的整数）,使用weights考虑权重，权重为距离的倒数
+            count=np.bincount(self.y[index],weights=1/dis[index])
+            #count.argmax()返回ndarray数组中，值最大的元素对应的索引，该索引即为我们判定的类别
+            #最大元素索引，就是出现次数最多的元素
+            result.append(count.argmax())#append把count.argmax()的结果加到result后面
+        return np.array(result)
+
+
+
+'''训练与测试'''
+
+#提取每个类别的鸢尾花的数据
+t0=data[data['Species']==0]
+t1=data[data['Species']==1]
+t2=data[data['Species']==2]
+
+#将提取的数据打乱，是其更具有随机性
+#sample()是随机抽样函数，当抽样数等于数组总行数即相当于将整个数组打乱
+#指定random_state后，可以保证每次执行打扰操作后的乱序结果都一样(伪随机)
+t0=t0.sample(len(t0),random_state=0)
+t1=t1.sample(len(t1),random_state=0)
+t2=t2.sample(len(t2),random_state=0)
+
+#构建训练集和测试集,按照8:2划分
+train_X=pd.concat([t0.iloc[:round(len(t0)*0.8),:-1],t1.iloc[:round(len(t0)*0.8),:-1],t2.iloc[:round(len(t0)*0.8),:-1]],axis=0)#concat将数组合并,合并的数组为t0,t1,t2的前四十行，列数是截止到最后一列前面的列,axis=0表示按照纵向拼接（上下拼接），round为取整函数（四舍五入）
+train_y=pd.concat([t0.iloc[:round(len(t0)*0.8),-1],t1.iloc[:round(len(t0)*0.8),-1],t2.iloc[:round(len(t0)*0.8),-1]],axis=0)
+test_X=pd.concat([t0.iloc[round(len(t0)*0.8):,:-1],t1.iloc[round(len(t0)*0.8):,:-1],t2.iloc[round(len(t0)*0.8):,:-1]],axis=0)
+test_y=pd.concat([t0.iloc[round(len(t0)*0.8):,-1],t1.iloc[round(len(t0)*0.8):,-1],t2.iloc[round(len(t0)*0.8):,-1]],axis=0)
+
+#创建KNN对象，进行训练与测试(k=3即选择3个邻居)
+knn=KNN(k=5)
+
+#进行训练
+knn.fit(train_X,train_y)
+
+#进行测试
+result=knn.predict2(test_X)
+print(result)
+print(test_y)
+print(result==test_y)#预测正确的返回True,预测错误的返回False
+
+#返回预测的总数和预测正确的个数，并返回预测正确率
+print(len(result))
+print(np.sum(result==test_y))
+print(np.sum(result==test_y)/len(result))
+
+
+
+'''结果可视化'''
+
+#默认情况matplotlib不支持中文显示，设置一下使其支持中文显示
+mpl.rcParams['font.family']='SimHei'#黑体
+mpl.rcParams['axes.unicode_minus']=False#负号会默认使用Unicode显示，不支持中文显示，所以需要设置
+
+#选取两个维度绘制散点图
+#绘制训练集数据
+#设置画布大小
+plt.figure(figsize=(10,10))
+
+plt.scatter(x=t0["SepalLengthCm"][:40],y=t0["PetalLengthCm"][:40],color='r',label='Iris-virginica')
+plt.scatter(x=t1["SepalLengthCm"][:40],y=t1["PetalLengthCm"][:40],color='g',label='Iris-setosa')
+plt.scatter(x=t2["SepalLengthCm"][:40],y=t2["PetalLengthCm"][:40],color='b',label='Iris-versicolor')
+
+#绘制测试集数据（用不同符号表示预测正确和错误的数据，以示区别）
+right=test_X[result==test_y]
+wrong=test_X[result!=test_y]
+plt.scatter(x=right["SepalLengthCm"],y=right["PetalLengthCm"],color="black",marker="x",label="right")
+plt.scatter(x=wrong["SepalLengthCm"],y=wrong["PetalLengthCm"],color="m",marker=">",label="wrong")
+
+plt.legend()
+plt.xlabel("花萼长度")
+plt.ylabel("花瓣长度")
+plt.title("KNN分类结果显示")
+
+plt.show()
